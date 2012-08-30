@@ -116,13 +116,13 @@ class SpodTests
 		Manager.cleanup();
 		
 		Assert.equals(2, MySpodClass.manager.all().length);
-		var req = MySpodClass.manager.search( { relation: OtherSpodClass.manager.search( { name:"third spod" } ).first() } );
+		var req = MySpodClass.manager.search( { relation: OtherSpodClass.manager.search( { name:"third spod" }, null, false ).first() }, null, false );
 		Assert.equals(1, req.length);
 		scls = req.first();
 		
 		scls.relation.name = "Test";
 		scls.relation.update();
 		
-		Assert.isNull(OtherSpodClass.manager.search( { name:"third spod" } ).first());
+		Assert.isNull(OtherSpodClass.manager.search( { name:"third spod" }, null, false ).first());
 	}
 }
