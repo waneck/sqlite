@@ -18,11 +18,8 @@ class MySpodClass extends Object
 	@:relation(rid) public var relation:OtherSpodClass;
 	@:relation(rnid) public var relationNullable:Null<OtherSpodClass>;
 	
-	//new in haxe 2.11
-	#if haxe_211
-	public var data:SData<ComplexClass>;
-	public var anEnum:SEnum<MyEnum>;
-	
-	#end
+	//public var data:SData<ComplexClass>;
+	//not working - cpp compile error
+	//public var anEnum:SEnum<MyEnum>;
 	
 }

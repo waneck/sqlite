@@ -2,6 +2,7 @@ package sqlite.tests;
 import haxe.io.Bytes;
 import haxe.EnumFlags;
 import sqlite.tests.data.ComplexClass;
+import sqlite.tests.data.MyEnum;
 import sqlite.tests.data.MySpodClass;
 import sqlite.tests.data.OtherSpodClass;
 import sys.db.Connection;
@@ -52,10 +53,8 @@ class SpodTests
 		scls.enumFlags.set(FirstValue);
 		scls.enumFlags.set(ThirdValue);
 		
-		#if haxe_2011
-		scls.data = new ComplexClass( { name:"test", array:["this", "is", "a", "test"] } );
-		scls.anEnum = SecondValue;
-		#end
+		//scls.data = new ComplexClass( { name:"test", array:["this", "is", "a", "test"] } );
+		//scls.anEnum = SecondValue;
 		
 		return scls;
 	}
@@ -90,6 +89,7 @@ class SpodTests
 		Assert.equals(2.0, cls1.double);
 		Assert.equals(true, cls1.boolean);
 		Assert.equals("some string", cls1.string);
+		Assert.notNull(cls1.date);
 		Assert.equals(new Date(2012, 07, 30, 0, 0, 0).getTime(), cls1.date.getTime());
 		
 		Assert.equals("\x01\n\r\x02", cls1.binary.toString());
@@ -97,11 +97,8 @@ class SpodTests
 		Assert.isFalse(cls1.enumFlags.has(SecondValue));
 		Assert.isTrue(cls1.enumFlags.has(ThirdValue));
 		
-		#if haxe_2011
-		Assert.same(new ComplexClass( { name:"test", array:["this", "is", "a", "test"] } ), cls1.data);
-		Assert.equals(SecondValue, cls1.anEnum);
-		
-		#end
+		//Assert.same(new ComplexClass( { name:"test", array:["this", "is", "a", "test"] } ), cls1.data);
+		//Assert.equals(SecondValue, cls1.anEnum);
 		
 		Assert.equals("first spod", cls1.relation.name);
 		Assert.equals("second spod", cls1.relationNullable.name);
@@ -109,20 +106,23 @@ class SpodTests
 		//test create a new class
 		var scls = getDefaultClass();
 		
-		scls.relation = new OtherSpodClass("third spod");
+		c1 = new OtherSpodClass("third spod");
+		c1.insert();
+		
+		scls.relation = c1;
 		scls.insert();
 		
 		scls = cls1 = null;
 		Manager.cleanup();
 		
 		Assert.equals(2, MySpodClass.manager.all().length);
-		var req = MySpodClass.manager.search( { relation: OtherSpodClass.manager.search( { name:"third spod" }, null, false ).first() }, null, false );
+		var req = MySpodClass.manager.search( { relation: OtherSpodClass.manager.search( { name:"third spod" }, null, true ).first() }, null, true );
 		Assert.equals(1, req.length);
 		scls = req.first();
 		
 		scls.relation.name = "Test";
 		scls.relation.update();
 		
-		Assert.isNull(OtherSpodClass.manager.search( { name:"third spod" }, null, false ).first());
+		Assert.isNull(OtherSpodClass.manager.search( { name:"third spod" }, null, true ).first());
 	}
 }
