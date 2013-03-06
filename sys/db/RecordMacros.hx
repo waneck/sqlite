@@ -1,29 +1,26 @@
 /*
- * Copyright (c) 2005-2011, The haXe Project Contributors
- * All rights reserved.
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Copyright (C)2005-2012 Haxe Foundation
  *
- *   - Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   - Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
  *
- * THIS SOFTWARE IS PROVIDED BY THE HAXE PROJECT CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL THE HAXE PROJECT CONTRIBUTORS BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
- * DAMAGE.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  */
 package sys.db;
-import sys.db.SpodInfos;
+import sys.db.RecordInfos;
 import haxe.macro.Expr;
 import haxe.macro.Type.VarAccess;
 #if macro
@@ -32,23 +29,23 @@ import haxe.macro.Context;
 
 private typedef SqlFunction = {
 	var name : String;
-	var params : Array<SpodType>;
-	var ret : SpodType;
+	var params : Array<RecordType>;
+	var ret : RecordType;
 	var sql : String;
 }
 
-class SpodMacros {
+class RecordMacros {
 
 	static var GLOBAL = null;
 	static var simpleString = ~/^[A-Za-z0-9 ]*$/;
 
 	var isNull : Bool;
 	var manager : Expr;
-	var inf : SpodInfos;
+	var inf : RecordInfos;
 	var g : {
-		var cache : Hash<SpodInfos>;
-		var types : Hash<SpodType>;
-		var functions : Hash<SqlFunction>;
+		var cache : haxe.ds.StringMap<RecordInfos>;
+		var types : haxe.ds.StringMap<RecordType>;
+		var functions : haxe.ds.StringMap<SqlFunction>;
 	};
 
 	function new(c) {
@@ -58,20 +55,20 @@ class SpodMacros {
 			g = initGlobals();
 			GLOBAL = g;
 		}
-		inf = getSpodInfos(c);
+		inf = getRecordInfos(c);
 	}
 
 	function initGlobals()
 	{
-		var cache = new Hash();
-		var types = new Hash();
-		for( c in Type.getEnumConstructs(SpodType) ) {
-			var e : Dynamic = Reflect.field(SpodType, c);
-			if( Std.is(e, SpodType) )
+		var cache = new haxe.ds.StringMap();
+		var types = new haxe.ds.StringMap();
+		for( c in Type.getEnumConstructs(RecordType) ) {
+			var e : Dynamic = Reflect.field(RecordType, c);
+			if( Std.is(e, RecordType) )
 				types.set("S"+c.substr(1), e);
 		}
 		types.remove("SNull");
-		var functions = new Hash();
+		var functions = new haxe.ds.StringMap();
 		for( f in [
 			{ name : "now", params : [], ret : DDateTime, sql : "NOW($)" },
 			{ name : "curDate", params : [], ret : DDate, sql : "CURDATE($)" },
@@ -114,7 +111,7 @@ class SpodMacros {
 		#end
 	}
 
-	public dynamic function getManager( t : haxe.macro.Type, p : Position ) : SpodMacros {
+	public dynamic function getManager( t : haxe.macro.Type, p : Position ) : RecordMacros {
 		#if macro
 		return getManagerInfos(t, p);
 		#else
@@ -122,7 +119,7 @@ class SpodMacros {
 		return null;
 		#end
 	}
-	
+
 	public dynamic function resolveType( name : String ) : haxe.macro.Type {
 		#if macro
 		return Context.getType(name);
@@ -143,9 +140,9 @@ class SpodMacros {
 		throw "Unsupported " + Std.string(t);
 	}
 
-	function makeSpod( t : haxe.macro.Type ) {
+	function makeRecord( t : haxe.macro.Type ) {
 		switch( t ) {
-		case TInst(c, p):
+		case TInst(c, _):
 			var name = c.toString();
 			var cl = c.get();
 			var csup = cl.superClass;
@@ -158,7 +155,7 @@ class SpodMacros {
 			var name = t.toString();
 			if( p.length == 1 && (name == "Null" || name == "sys.db.SNull") ) {
 				isNull = true;
-				return makeSpod(p[0]);
+				return makeRecord(p[0]);
 			}
 		default:
 		}
@@ -186,7 +183,7 @@ class SpodMacros {
 
 	function makeType( t : haxe.macro.Type ) {
 		switch( t ) {
-		case TInst(c, p):
+		case TInst(c, _):
 			var name = c.toString();
 			return switch( name ) {
 			case "Int": DInt;
@@ -194,14 +191,22 @@ class SpodMacros {
 			case "String": DText;
 			case "Date": DDateTime;
 			case "haxe.io.Bytes": DBinary;
-			default: throw "Unsupported SPOD Type " + name;
+			default: throw "Unsupported Record Type " + name;
 			}
-		case TEnum(e, p):
+		case TAbstract(a, _):
+			var name = a.toString();
+			return switch( name ) {
+			case "Int": DInt;
+			case "Float": DFloat;
+			case "Bool": DBool;
+			default: throw "Unsupported Record Type " + name;
+			}
+		case TEnum(e, _):
 			var name = e.toString();
 			return switch( name ) {
 			case "Bool": DBool;
 			default:
-				throw "Unsupported SPOD Type " + name + " (enums must be wrapped with SData or SEnum)";
+				throw "Unsupported Record Type " + name + " (enums must be wrapped with SData or SEnum)";
 			}
 		case TType(td, p):
 			var name = td.toString();
@@ -215,7 +220,7 @@ class SpodMacros {
 				case "SBytes": return DBytes(makeInt(p[0]));
 				case "SNull", "Null": isNull = true; return makeType(p[0]);
 				case "SFlags": return DFlags(getFlags(p[0]),false);
-				case "SSmallFlags": return DFlags(getFlags(p[0]), true);
+				case "SSmallFlags": return DFlags(getFlags(p[0]),true);
 				case "SData": return DData;
 				case "SEnum":
 					switch( p[0] ) {
@@ -243,40 +248,21 @@ class SpodMacros {
 			return makeType(follow(t, true));
 		default:
 		}
-		throw "Unsupported SPOD Type " + Std.string(t);
-	}
-	
-	static function mkIdent(e:Expr) {
-		return switch( e.expr ) {
-		case EConst(c):
-			switch( c ) {
-			#if haxe3
-			case CIdent(s): s;
-			#else
-			case CIdent(s), CType(s): s;
-			#end
-			default: throw new Error("Identifier expected", e.pos);
-			}
-		default: throw new Error("Identifier expected", e.pos);
-		}
+		throw "Unsupported Record Type " + Std.string(t);
 	}
 
 	function makeIdent( e : Expr ) {
 		return switch( e.expr ) {
 		case EConst(c):
 			switch( c ) {
-			#if haxe3
 			case CIdent(s): s;
-			#else
-			case CIdent(s), CType(s): s;
-			#end
 			default: error("Identifier expected", e.pos);
 			}
 		default: error("Identifier expected", e.pos);
 		}
 	}
 
-	function getSpodInfos( c : haxe.macro.Type.Ref<haxe.macro.Type.ClassType> ) : SpodInfos {
+	function getRecordInfos( c : haxe.macro.Type.Ref<haxe.macro.Type.ClassType> ) : RecordInfos {
 		var cname = c.toString();
 		var i = g.cache.get(cname);
 		if( i != null ) return i;
@@ -284,12 +270,12 @@ class SpodMacros {
 			key : null,
 			name : cname.split(".").pop(), // remove package name
 			fields : [],
-			hfields : new Hash(),
+			hfields : new haxe.ds.StringMap(),
 			relations : [],
 			indexes : [],
 		};
 		var c = c.get();
-		var fieldsPos = new Hash();
+		var fieldsPos = new haxe.ds.StringMap();
 		var fields = c.fields.get();
 		var csup = c.superClass;
 		while( csup != null ) {
@@ -319,7 +305,7 @@ class SpodMacros {
 						for( p in m.params )
 							params.push({ i : makeIdent(p), p : p.pos });
 						isNull = false;
-						var t = makeSpod(f.type);
+						var t = makeRecord(f.type);
 						if( t == null ) error("Relation type should be a sys.db.Object", f.pos);
 						var r = {
 							prop : f.name,
@@ -419,12 +405,12 @@ class SpodMacros {
 	}
 
 	function quoteField( f : String ) {
-		var m : { private var KEYWORDS : Hash<Bool>; } = Manager;
+		var m : { private var KEYWORDS : haxe.ds.StringMap<Bool>; } = Manager;
 		return m.KEYWORDS.exists(f.toLowerCase()) ? "`"+f+"`" : f;
 	}
 
 	function initManager( pos : Position ) {
-		manager = { expr : #if haxe3 EField #else EType #end({ expr : EField({ expr : EConst(CIdent("sys")), pos : pos },"db"), pos : pos }, "Manager"), pos : pos };
+		manager = { expr : EField({ expr : EField({ expr : EConst(CIdent("sys")), pos : pos },"db"), pos : pos }, "Manager"), pos : pos };
 	}
 
 	inline function makeString( s : String, pos ) {
@@ -443,7 +429,7 @@ class SpodMacros {
 		return { expr : EBinop(OpAdd, sql, makeString(s,sql.pos)), pos : sql.pos };
 	}
 
-	function sqlQuoteValue( v : Expr, t : SpodType ) {
+	function sqlQuoteValue( v : Expr, t : RecordType ) {
 		switch( v.expr ) {
 		case EConst(c):
 			switch( c ) {
@@ -463,11 +449,11 @@ class SpodMacros {
 		return { expr : ECall( { expr : EField(manager, "quoteAny"), pos : v.pos }, [ensureType(v,t)]), pos : v.pos }
 	}
 
-	inline function sqlAddValue( sql : Expr, v : Expr, t : SpodType ) {
+	inline function sqlAddValue( sql : Expr, v : Expr, t : RecordType ) {
 		return { expr : EBinop(OpAdd, sql, sqlQuoteValue(v,t)), pos : sql.pos };
 	}
 
-	function unifyClass( t : SpodType ) {
+	function unifyClass( t : RecordType ) {
 		return switch( t ) {
 		case DId, DInt, DUId, DUInt, DEncoded, DFlags(_), DTinyInt, DTinyUInt, DSmallInt, DSmallUInt, DMediumInt, DMediumUInt: 0;
 		case DBigId, DBigInt, DSingle, DFloat: 1;
@@ -489,18 +475,18 @@ class SpodMacros {
 		return c == rc || (c == 0 && rc == 1); // allow Int-to-Float expansion
 	}
 
-	function typeStr( t : SpodType ) {
+	function typeStr( t : RecordType ) {
 		return Std.string(t).substr(1);
 	}
 
-	function canStringify( t : SpodType ) {
+	function canStringify( t : RecordType ) {
 		return switch( unifyClass(t) ) {
 		case 0, 1, 2, 3, 4, 5, 7: true;
 		default: false;
 		};
 	}
 
-	function convertType( t : SpodType ) {
+	function convertType( t : RecordType ) {
 		var pack = [];
 		return TPath( {
 			name : switch( unifyClass(t) ) {
@@ -518,7 +504,7 @@ class SpodMacros {
 		});
 	}
 
-	function unify( t : SpodType, rt : SpodType, pos : Position ) {
+	function unify( t : RecordType, rt : RecordType, pos : Position ) {
 		if( !tryUnify(t, rt) )
 			error(typeStr(t) + " should be " + typeStr(rt), pos);
 	}
@@ -527,8 +513,8 @@ class SpodMacros {
 		var r1 = buildCond(e1);
 		var r2 = buildCond(e2);
 		unify(r2.t, r1.t, e2.pos);
-		if( !tryUnify(r1.t, DInt) && !tryUnify(r1.t, DDate) && !tryUnify(r1.t, DText) )
-			unify(r1.t, DInt, e1.pos);
+		if( !tryUnify(r1.t, DFloat) && !tryUnify(r1.t, DDate) && !tryUnify(r1.t, DText) )
+			unify(r1.t, DFloat, e1.pos);
 		return { sql : makeOp(op, r1.sql, r2.sql, pos), t : DBool, n : r1.n || r2.n };
 	}
 
@@ -635,17 +621,9 @@ class SpodMacros {
 					var p = f.expr.pos;
 					path.push("manager");
 					var first = path.shift();
-					#if haxe3
 					var mpath = { expr : EConst(CIdent(first)), pos : p };
-					#else
-					var mpath = { expr : EConst(first.charCodeAt(0) <= 'Z'.code ? CType(first) : CIdent(first)), pos : p };
-					#end
 					for ( e in path )
-						#if haxe3
 						mpath = { expr : EField(mpath, e), pos : p };
-						#else
-						mpath = { expr : e.charCodeAt(0) <= 'Z'.code ? EType(mpath, e) : EField(mpath, e), pos : p };
-						#end
 					var m = getManager(typeof(mpath),p);
 					var getid = { expr : ECall( { expr : EField(mpath, "unsafeGetId"), pos : p }, [f.expr]), pos : p };
 					f.field = r.key;
@@ -664,7 +642,7 @@ class SpodMacros {
 		case EObjectDecl(fl):
 			var first = true;
 			var sql = makeString("(", p);
-			var fields = new Hash();
+			var fields = new haxe.ds.StringMap();
 			for( f in fl ) {
 				var fi = getField(f);
 				if( first )
@@ -734,10 +712,10 @@ class SpodMacros {
 				return buildInt("<<", e1, e2, p);
 			case OpMod:
 				return buildNum("%", e1, e2, p);
-			case OpUShr, OpInterval, OpAssignOp(_), OpAssign:
+			case OpUShr, OpInterval, OpAssignOp(_), OpAssign, OpArrow:
 				error("Unsupported operation", p);
 			}
-		case EUnop(op, post, e):
+		case EUnop(op, _, e):
 			var r = buildCond(e);
 			switch( op ) {
 			case OpNot:
@@ -767,11 +745,7 @@ class SpodMacros {
 			case CFloat(s): return { sql : makeString(s, p), t : DFloat, n : false };
 			case CString(s): return { sql : sqlQuoteValue(cond, DText), t : DString(s.length), n : false };
 			case CRegexp(_): error("Unsupported", p);
-			#if haxe3
 			case CIdent(n):
-			#else
-			case CIdent(n), CType(n):
-			#end
 				if( n.charCodeAt(0) == "$".code ) {
 					n = n.substr(1);
 					var f = inf.hfields.get(n);
@@ -792,11 +766,7 @@ class SpodMacros {
 			switch( c.expr ) {
 			case EConst(co):
 				switch(co) {
-				#if haxe3
 				case CIdent(t):
-				#else
-				case CIdent(t), CType(t):
-				#end
 					if( t.charCodeAt(0) == '$'.code ) {
 						var f = g.functions.get(t.substr(1));
 						if( f == null ) error("Unknown method " + t, c.pos);
@@ -821,11 +791,7 @@ class SpodMacros {
 					}
 				default:
 				}
-			#if haxe3
 			case EField(e, f):
-			#else
-			case EField(e, f), EType(e, f):
-			#end
 				switch( f ) {
 				case "like":
 					if( pl.length == 1 ) {
@@ -856,11 +822,7 @@ class SpodMacros {
 			default:
 			}
 			return buildDefault(cond);
-		#if haxe3
 		case EField(_, _), EDisplay(_):
-		#else
-		case EField(_, _), EType(_, _), EDisplay(_):
-		#end
 			return buildDefault(cond);
 		case EIf(e, e1, e2), ETernary(e, e1, e2):
 			if( e2 == null ) error("If must have an else statement", p);
@@ -885,7 +847,7 @@ class SpodMacros {
 		return null;
 	}
 
-	function ensureType( e : Expr, rt : SpodType ) {
+	function ensureType( e : Expr, rt : RecordType ) {
 		return { expr : ECheckType(e, convertType(rt)), pos : e.pos };
 	}
 
@@ -917,11 +879,7 @@ class SpodMacros {
 		switch( e.expr ) {
 		case EConst(c):
 			switch( c ) {
-			#if haxe3
 			case CIdent(t):
-			#else
-			case CIdent(t), CType(t):
-			#end
 				if( !inf.hfields.exists(t) )
 					error("Unknown database field", e.pos);
 				return quoteField(t);
@@ -988,7 +946,7 @@ class SpodMacros {
 
 	function buildOptions( eopt : Expr ) {
 		var p = eopt.pos;
-		var opts = new Hash();
+		var opts = new haxe.ds.StringMap();
 		var opt = { limit : null, orderBy : null, forceIndex : null };
 		switch( eopt.expr ) {
 		case EObjectDecl(fields):
@@ -1046,7 +1004,7 @@ class SpodMacros {
 		case TInst(c, _): if( c.toString() == "sys.db.Object" ) return null; c;
 		default: return null;
 		};
-		return new SpodMacros(c);
+		return new RecordMacros(c);
 	}
 
 
@@ -1056,7 +1014,7 @@ class SpodMacros {
 	public static function addRtti() : Array<Field> {
 		if( RTTI ) return null;
 		RTTI = true;
-		Context.getType("sys.db.SpodInfos");
+		Context.getType("sys.db.RecordInfos");
 		Context.onGenerate(function(types) {
 			for( t in types )
 				switch( t ) {
@@ -1079,7 +1037,7 @@ class SpodMacros {
 				default:
 				}
 		});
-		Context.registerModuleReuseCall("sys.db.Manager", "sys.db.SpodMacros.addRtti()");
+		Context.registerModuleReuseCall("sys.db.Manager", "sys.db.RecordMacros.addRtti()");
 		return null;
 	}
 
@@ -1199,6 +1157,7 @@ class SpodMacros {
 		case "SData":
 			f.kind = FProp("dynamic", "dynamic", ft, null);
 			f.meta.push( { name : ":data", params : [], pos : f.pos } );
+			f.meta.push( { name : ":isVar", params : [], pos : f.pos } );
 			var meta = [ { name : ":hide", params : [], pos : pos } ];
 			var cache = "cache_" + f.name;
 			var ecache = { expr : EConst(CIdent(cache)), pos : pos };
@@ -1225,6 +1184,7 @@ class SpodMacros {
 			fields.push( { name : "set_" + f.name, pos : pos, meta : meta, access : [APrivate], doc : null, kind : FFun(set) } );
 		case "SEnum":
 			f.kind = FProp("dynamic", "dynamic", ft, null);
+			f.meta.push( { name : ":isVar", params : [], pos : f.pos } );
 			f.meta.push( { name : ":data", params : [], pos : f.pos } );
 			var meta = [ { name : ":hide", params : [], pos : pos } ];
 			var efield = { expr : EConst(CIdent(f.name)), pos : pos };
@@ -1255,10 +1215,9 @@ class SpodMacros {
 			buildField(f, fields, t);
 		}
 	}
-	
+
 	public static function macroBuild() {
 		var fields = Context.getBuildFields();
-		var toAdd = [];
 		var hasManager = false;
 		for( f in fields ) {
 			var skip = false;
@@ -1270,11 +1229,6 @@ class SpodMacros {
 				case ":relation":
 					switch( f.kind ) {
 					case FVar(t, _):
-						for (p in m.params)
-						{
-							toAdd.push( { name : mkIdent(p), pos : p.pos, meta:[{ pos:p.pos, params:[], name:":skip" }], kind: FVar(TPath( { name:"Dynamic", sub:null, params:[], pack:[] } )), doc:null, access:[] } );
-						}
-						
 						f.kind = FProp("dynamic", "dynamic", t);
 						if( isNeko )
 							continue;
@@ -1286,11 +1240,7 @@ class SpodMacros {
 							switch( p.expr ) {
 							case EConst(c):
 								switch( c ) {
-								#if haxe3
 								case CIdent(i):
-								#else
-								case CIdent(i), CType(i):
-								#end
 									relParams.push(i);
 								default:
 								}
@@ -1365,7 +1315,7 @@ class SpodMacros {
 			var enew = { expr : ENew( { pack : ["sys", "db"], name : "Manager", sub : null, params : [TPType(tinst)] }, [Context.parse(path, p)]), pos : p }
 			fields.push({ name : "manager", meta : [], kind : FVar(null,enew), doc : null, access : [AStatic,APublic], pos : p });
 		}
-		return fields.concat(toAdd);
+		return fields;
 	}
 
 	#end

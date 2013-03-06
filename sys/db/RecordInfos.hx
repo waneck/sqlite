@@ -21,45 +21,64 @@
  */
 package sys.db;
 
-/**
-	Record Object : the persistent object base type. See the tutorial on haXe
-	website to learn how to use Record.
-**/
-@:keepSub
-@:autoBuild(sys.db.RecordMacros.macroBuild()) @:skipFields
-class Object {
+enum RecordType {
+	DId;
+	DInt;
+	DUId;
+	DUInt;
+	DBigId;
+	DBigInt;
+	DSingle;
+	DFloat;
+	DBool;
+	DString( n : Int );
+	DDate;
+	DDateTime;
+	DTimeStamp;
+	DTinyText;
+	DSmallText;
+	DText;
+	DSmallBinary;
+	DLongBinary;
+	DBinary;
+	DBytes( n : Int );
+	DEncoded;
+	DSerialized;
+	DNekoSerialized;
+	DFlags( flags : Array<String>, autoSize : Bool );
+	DTinyInt;
+	DTinyUInt;
+	DSmallInt;
+	DSmallUInt;
+	DMediumInt;
+	DMediumUInt;
+	DData;
+	DEnum( name : String );
+	// specific for intermediate calculus
+	DInterval;
+	DNull;
+}
 
-	var _lock(default,never) : Bool;
-	var _manager(default,never) : sys.db.Manager<Dynamic>;
+typedef RecordField = {
+	var name : String;
+	var t : RecordType;
+	var isNull : Bool;
+}
 
-	public function new() {
-		#if php
-		if( _manager == null ) untyped _manager = Type.getClass(this).manager;
-		#end
-	}
+typedef RecordRelation = {
+	var prop : String;
+	var key : String;
+	var type : String;
+	var cascade : Bool;
+	var lock : Bool;
+	var isNull : Bool;
+}
 
-	public function insert() {
-		untyped _manager.doInsert(this);
-	}
-
-	public function update() {
-		untyped _manager.doUpdate(this);
-	}
-
-	public function lock() {
-		untyped _manager.doLock(this);
-	}
-
-	public function delete() {
-		untyped _manager.doDelete(this);
-	}
-
-	public function isLocked() {
-		return _lock;
-	}
-
-	public function toString() : String {
-		return untyped _manager.objectToString(this);
-	}
-
+typedef RecordInfos = {
+	var name : String;
+	var key : Array<String>;
+	var fields : Array<RecordField>;
+	var hfields : haxe.ds.StringMap<RecordField>;
+	var relations : Array<RecordRelation>;
+	var indexes : Array<{ keys : Array<String>, unique : Bool }>;
 }
