@@ -28,13 +28,17 @@ package sys.db;
 @:keepSub
 @:autoBuild(sys.db.RecordMacros.macroBuild()) @:skipFields
 class Object {
-
+	
+	#if cpp
+	var __cache__(default, never):Dynamic;
+	#end
 	var _lock(default,never) : Bool;
 	var _manager(default,never) : sys.db.Manager<Dynamic>;
 
 	public function new() {
-		#if php
-		if( _manager == null ) untyped _manager = Type.getClass(this).manager;
+		#if (php || cpp)
+		var cls:Dynamic = Type.getClass(this);
+		if( _manager == null ) untyped _manager = cls.manager;
 		#end
 	}
 
